@@ -5,6 +5,7 @@ from datetime import timedelta
 from elasticsearch import Elasticsearch
 import json
 import os
+import subprocess
 import sys
 
 # read environment variables
@@ -39,6 +40,30 @@ def get_valid_indices(nameprefix, retention_days, timeformat):
         out.add(string)
     return out
 
+def check_elasticsearch_diskspace():
+    ''' Exec into a elasticsearch pod and query the diskspace '''
+    results = {}
+    try:
+        disk_used = 0
+        disk_free = 0
+        trash_var = 0
+
+        disk_output = subprocess.check_output('./cluster-logging-tools/scripts/es-disk-usage', shell=True)
+        for item in disk_output:
+            if "/elasticsearch/persistent" not in item:
+                disk_used = disk_free
+                disk_free = trash_var
+                trash_var = item
+            else:
+                break
+
+        results['used'] = int(disk_used)
+        results['free'] = int(disk_free)
+    except:
+        results['used'] = int(0)
+        results['free'] = int(0)
+
+    return results
 
 def main():
     global index_name_prefix
@@ -91,6 +116,9 @@ def main():
             sys.exit(1)
 
         searchterm = index_name_prefix + "*"
+
+        # /dev/disk1s1   466Gi   70Gi  384Gi    16%  708979 4881743901    0%   /System/Volumes/Data
+        es_disk_output = subprocess.check_output('./cluster-logging-tools/scripts/es-disk-usage', shell=True)
 
         try:
             indices = es.indices.get(searchterm)
