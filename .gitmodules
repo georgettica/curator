@@ -1,0 +1,3 @@
+[submodule "cluster-logging-tools"]
+	path = cluster-logging-tools
+	url = git@github.com:jcantrill/cluster-logging-tools.git
