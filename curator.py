@@ -40,30 +40,29 @@ def get_valid_indices(nameprefix, retention_days, timeformat):
         out.add(string)
     return out
 
-def check_elasticsearch_diskspace():
-    ''' Exec into a elasticsearch pod and query the diskspace '''
-    results = {}
-    try:
-        disk_used = 0
-        disk_free = 0
-        trash_var = 0
+def get_disk_total():
 
-        disk_output = subprocess.check_output('./cluster-logging-tools/scripts/es-disk-usage', shell=True)
-        for item in disk_output:
-            if "/elasticsearch/persistent" not in item:
-                disk_used = disk_free
-                disk_free = trash_var
-                trash_var = item
-            else:
-                break
+    all = subprocess.check_output(args=['./es-used-disk', '2'], universal_newlines=True).rstrip('\n').split('\n')
 
-        results['used'] = int(disk_used)
-        results['free'] = int(disk_free)
-    except:
-        results['used'] = int(0)
-        results['free'] = int(0)
+    disk_total = 0
+    for row in all:
+        if row != '1M-blocks':
+            value = int(row[:-1])      
+            disk_total = disk_total + value
 
-    return results
+    return disk_total
+
+def get_disk_used():
+    
+    all = subprocess.check_output(args=['./es-used-disk', '5'], universal_newlines=True).rstrip('\n').split('\n')
+
+    disk_used = 0
+    for row in all:
+        if row != 'Use%':
+            value = int(row[:-1])            
+            disk_used = disk_used + value
+
+    return disk_used
 
 def main():
     global index_name_prefix
@@ -92,6 +91,15 @@ def main():
     # index name prefixes from space-separated string
     index_name_prefix_list = index_name_prefix.split()
 
+    # Check used and total disk space
+    print('Used disk space:', get_disk_used(), '%')
+
+    print('Total disk space:', get_disk_total(), 'Mb')
+
+    # Todo: Error with connection to ES in code below exit
+    # For debugging purposes exitting code
+    sys.exit(1)
+
     for index_name_prefix in index_name_prefix_list:
 
         log("info", "Removing indices with name format '{prefix}{timeformat}' older than {days} days from host '{host}'".format(
@@ -116,9 +124,6 @@ def main():
             sys.exit(1)
 
         searchterm = index_name_prefix + "*"
-
-        # /dev/disk1s1   466Gi   70Gi  384Gi    16%  708979 4881743901    0%   /System/Volumes/Data
-        es_disk_output = subprocess.check_output('./cluster-logging-tools/scripts/es-disk-usage', shell=True)
 
         try:
             indices = es.indices.get(searchterm)
